@@ -102,7 +102,7 @@ export const api = {
   },
 
   // Projections
-  getInflationProjection: ({ annualRate, monthsAhead, lookbackMonths, includeDiscretionary }) => {
+  getInflationProjection: ({ annualRate, monthsAhead, lookbackMonths, includeDiscretionary, excludeCurrentMonth = false }) => {
     return request('/projections/inflation', {
       method: 'POST',
       body: JSON.stringify({
@@ -110,10 +110,8 @@ export const api = {
         months_ahead: Number(monthsAhead),
         lookback_months: Number(lookbackMonths),
         include_discretionary: Boolean(includeDiscretionary),
-        // Sempre usar "average_months" para que o total gasto no período
-        // seja dividido pelo número de meses (média mensal real),
-        // e não a média por transação individual.
-        baseline_mode: 'average_months',
+        exclude_current_month: Boolean(excludeCurrentMonth),
+        baseline_mode: Number(lookbackMonths) === 1 ? 'latest_month' : 'average_months',
       }),
     });
   },

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 
 # --- Categories ---
@@ -104,9 +104,9 @@ class DashboardOverview(BaseModel):
 class InflationProjectionRequest(BaseModel):
     annual_rate: float = Field(..., ge=0, le=100, description="Annual inflation rate in percentage, e.g. 4.5")
     months_ahead: int = Field(default=12, ge=1, le=60)
-    lookback_months: int = Field(default=3, ge=1, le=24, description="Number of past months to compute baseline average")
+    lookback_months: int = Field(default=3, ge=0, le=60, description="Number of past months to compute baseline average, or 0 for all available history")
     include_discretionary: bool = Field(default=True, description="Whether to project total living cost or only essential categories")
-    baseline_mode: Optional[str] = Field(default="latest_month", description="latest_month, average_months, or custom")
+    baseline_mode: Optional[str] = Field(default="average_months", description="latest_month, average_months, or custom")
     selected_month: Optional[str] = None
     custom_baseline: Optional[float] = None
     exclude_current_month: bool = Field(default=False, description="Exclude in-progress current month from historical average")
@@ -126,6 +126,8 @@ class CategoryProjection(BaseModel):
     projected_final_cost: float
     increase_amount: float
     increase_percentage: float
+    total_period_amount: Optional[float] = None
+    monthly_sums: Optional[Dict[str, float]] = None
 
 class InflationProjectionResponse(BaseModel):
     annual_rate: float
@@ -137,6 +139,8 @@ class InflationProjectionResponse(BaseModel):
     baseline_total_avg: float
     baseline_cost_used: float
     months_analyzed: List[str]
+    months_count: int = 1
+    monthly_totals: Optional[Dict[str, float]] = None
     projected_months: List[ProjectionMonth]
     categories_projections: List[CategoryProjection]
     total_extra_cost_period: float

@@ -27,6 +27,7 @@ export default function InflationModule() {
   const [monthsAhead, setMonthsAhead] = useState(12);
   const [lookbackMonths, setLookbackMonths] = useState(3);
   const [includeDiscretionary, setIncludeDiscretionary] = useState(false); // Default to essential living cost!
+  const [excludeCurrentMonth, setExcludeCurrentMonth] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [projectionData, setProjectionData] = useState(null);
@@ -41,6 +42,7 @@ export default function InflationModule() {
         monthsAhead,
         lookbackMonths,
         includeDiscretionary,
+        excludeCurrentMonth,
       });
       setProjectionData(res);
     } catch (err) {
@@ -53,7 +55,7 @@ export default function InflationModule() {
 
   useEffect(() => {
     fetchProjection();
-  }, [annualRate, monthsAhead, lookbackMonths, includeDiscretionary]);
+  }, [annualRate, monthsAhead, lookbackMonths, includeDiscretionary, excludeCurrentMonth]);
 
   const presetRates = [3.5, 4.5, 5.5, 7.0];
 
@@ -218,12 +220,39 @@ export default function InflationModule() {
               <option value={3}>Média dos últimos 3 meses (Recomendado)</option>
               <option value={6}>Média dos últimos 6 meses</option>
               <option value={12}>Média dos últimos 12 meses</option>
+              <option value={0}>Todo o histórico registrado</option>
             </select>
+            <div className="mt-2 flex items-center justify-between">
+              <label className="flex items-center space-x-2 cursor-pointer select-none text-[11px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={excludeCurrentMonth}
+                  onChange={(e) => setExcludeCurrentMonth(e.target.checked)}
+                  className="rounded border-slate-300 dark:border-slate-700 text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+                />
+                <span>Excluir mês atual incompleto</span>
+              </label>
+            </div>
             <p className="text-[11px] text-slate-400 mt-1">
-              Calcula a média real dos gastos já registrados no seu SQLite.
+              Média mensal calculada pela soma das transações por categoria.
             </p>
           </div>
         </div>
+
+        {/* Historical Months Badge */}
+        {projectionData?.months_analyzed?.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center justify-between text-xs text-slate-500 dark:text-slate-400 gap-2">
+            <div className="flex items-center space-x-2">
+              <Calendar className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+              <span>
+                <strong>Meses analisados:</strong> {projectionData.months_analyzed.join(', ')} ({projectionData.months_count} {projectionData.months_count === 1 ? 'mês' : 'meses'}).
+              </span>
+            </div>
+            <span className="text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 px-2.5 py-1 rounded-lg">
+              Média mensal = soma das transações de cada categoria ÷ {projectionData.months_count} {projectionData.months_count === 1 ? 'mês' : 'meses'}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* KPI Projection Summary Cards */}
@@ -371,7 +400,7 @@ export default function InflationModule() {
             Impacto da Inflação por Categoria
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            Comparativo entre a média atual e o custo estimado ao término de {monthsAhead} meses
+            Comparativo entre a média mensal (soma das transações ÷ {projectionData?.months_count || 1} {projectionData?.months_count === 1 ? 'mês' : 'meses'}) e o custo projetado ao término de {monthsAhead} meses
           </p>
         </div>
 
@@ -381,7 +410,10 @@ export default function InflationModule() {
               <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
                 <th className="py-3 px-4">Categoria</th>
                 <th className="py-3 px-4">Classificação</th>
-                <th className="py-3 px-4 text-right">Média Atual</th>
+                {projectionData?.months_count > 1 && (
+                  <th className="py-3 px-4 text-right">Total Período ({projectionData.months_count}m)</th>
+                )}
+                <th className="py-3 px-4 text-right">Média Mensal Base</th>
                 <th className="py-3 px-4 text-right">Custo Projetado ({monthsAhead}m)</th>
                 <th className="py-3 px-4 text-right">Aumento Estimado</th>
               </tr>
@@ -403,8 +435,14 @@ export default function InflationModule() {
                       <span className="text-slate-400 text-xs">Estilo de Vida</span>
                     )}
                   </td>
-                  <td className="py-3.5 px-4 text-right text-slate-600 dark:text-slate-300 font-medium">
+                  {projectionData?.months_count > 1 && (
+                    <td className="py-3.5 px-4 text-right text-slate-500 dark:text-slate-400 text-xs">
+                      {formatCurrency(cat.total_period_amount || 0)}
+                    </td>
+                  )}
+                  <td className="py-3.5 px-4 text-right text-slate-700 dark:text-slate-200 font-medium">
                     {formatCurrency(cat.baseline_average)}
+                    <span className="text-[10px] text-slate-400 block font-normal">/mês</span>
                   </td>
                   <td className="py-3.5 px-4 text-right font-bold text-slate-900 dark:text-white">
                     {formatCurrency(cat.projected_final_cost)}

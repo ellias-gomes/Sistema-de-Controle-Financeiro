@@ -301,7 +301,7 @@ def calculate_inflation_projection(
 
     current_month_str = today.strftime("%Y-%m")
     target_months: List[str] = []
-    mode = request.baseline_mode or "latest_month"
+    mode = request.baseline_mode or ("latest_month" if request.lookback_months == 1 else "average_months")
 
     # 2. Determine target months according to baseline_mode
     if request.custom_baseline and request.custom_baseline > 0:
@@ -309,33 +309,32 @@ def calculate_inflation_projection(
         target_months = []
     elif mode == "selected_month" and request.selected_month:
         target_months = [request.selected_month]
-    elif mode == "average_months":
+    elif mode == "latest_month" or (request.lookback_months == 1 and mode != "average_months"):
+        mode = "latest_month"
         candidates = distinct_months
-        # Excluir automaticamente o mês atual (incompleto) quando há mais de 1 mês
-        # disponível e lookback_months >= 2, para não distorcer a média mensal real.
-        # Para lookback=1, usa o mês mais recente disponível normalmente.
-        should_exclude_current = (
-            request.lookback_months >= 2
-            and current_month_str in candidates
-            and len(candidates) > 1
-        )
-        if request.exclude_current_month or should_exclude_current:
-            candidates = [m for m in distinct_months if m != current_month_str]
-        target_months = candidates[:max(1, request.lookback_months)]
-    else:  # "latest_month"
-        # If user wants latest full month and current month is in progress, prefer the previous completed month
-        if request.exclude_current_month and len(distinct_months) > 1 and distinct_months[0] == current_month_str:
-            target_months = [distinct_months[1]]
-        elif distinct_months:
-            target_months = [distinct_months[0]]
+        if request.exclude_current_month and current_month_str in candidates and len(candidates) > 1:
+            candidates = [m for m in candidates if m != current_month_str]
+        target_months = [candidates[0]] if candidates else []
+    else:  # "average_months"
+        mode = "average_months"
+        candidates = distinct_months
+        if request.exclude_current_month and current_month_str in candidates and len(candidates) > 1:
+            candidates = [m for m in candidates if m != current_month_str]
+        
+        if request.lookback_months == 0:
+            target_months = candidates
         else:
-            target_months = []
-
+            target_months = candidates[:max(1, request.lookback_months)]
 
     # 3. Aggregate expenses across target_months
-    cat_past_sums: Dict[str, Dict[str, Any]] = {}
+    # Calculating monthly sums per category to guarantee that the baseline average is
+    # strictly based on the sum of monthly transactions per category (not transaction averages).
+    cat_data: Dict[str, Dict[str, Any]] = {}
+    monthly_totals: Dict[str, float] = {m: 0.0 for m in target_months}
     total_past_expense = 0.0
     essential_past_expense = 0.0
+
+    num_months = max(1, len(target_months))
 
     if target_months:
         expense_txs = db.query(models.Transaction)\
@@ -346,24 +345,32 @@ def calculate_inflation_projection(
             ).all()
 
         for tx in expense_txs:
-            total_past_expense += tx.amount
-            c_name = tx.category.name if tx.category else "Outros"
+            tx_month = tx.date[:7]
+            c_name = tx.category.name if tx.category else "Outros Gastos"
             c_color = tx.category.color if tx.category else "#94A3B8"
             c_essential = tx.category.is_essential if tx.category else False
+
+            if c_name not in cat_data:
+                cat_data[c_name] = {
+                    "name": c_name,
+                    "color": c_color,
+                    "is_essential": c_essential,
+                    "total": 0.0,
+                    "monthly_sums": {m: 0.0 for m in target_months}
+                }
+
+            if tx_month in cat_data[c_name]["monthly_sums"]:
+                cat_data[c_name]["monthly_sums"][tx_month] += tx.amount
+
+            cat_data[c_name]["total"] += tx.amount
+            total_past_expense += tx.amount
+
+            if tx_month in monthly_totals:
+                monthly_totals[tx_month] += tx.amount
 
             if c_essential:
                 essential_past_expense += tx.amount
 
-            if c_name not in cat_past_sums:
-                cat_past_sums[c_name] = {
-                    "name": c_name,
-                    "color": c_color,
-                    "is_essential": c_essential,
-                    "total": 0.0
-                }
-            cat_past_sums[c_name]["total"] += tx.amount
-
-        num_months = max(1, len(target_months))
         baseline_total_avg = total_past_expense / num_months
         baseline_essential_avg = essential_past_expense / num_months
     elif mode == "custom":
@@ -404,13 +411,12 @@ def calculate_inflation_projection(
             inflation_impact=round(extra_this_month, 2)
         ))
 
-    # 5. Category breakdown projections
+    # 5. Category breakdown projections based on monthly sums per category
     category_projections = []
     final_compound = (1.0 + monthly_effective_rate) ** months_ahead
-    num_divisor = max(1, len(target_months))
 
-    for cat in cat_past_sums.values():
-        c_avg = cat["total"] / num_divisor
+    for cat in cat_data.values():
+        c_avg = cat["total"] / num_months
         c_final = c_avg * final_compound
         c_increase = c_final - c_avg
         c_pct = round(((final_compound - 1.0) * 100), 2)
@@ -422,7 +428,9 @@ def calculate_inflation_projection(
             baseline_average=round(c_avg, 2),
             projected_final_cost=round(c_final, 2),
             increase_amount=round(c_increase, 2),
-            increase_percentage=c_pct
+            increase_percentage=c_pct,
+            total_period_amount=round(cat["total"], 2),
+            monthly_sums={m: round(v, 2) for m, v in cat["monthly_sums"].items()}
         ))
 
     category_projections.sort(key=lambda x: x.baseline_average, reverse=True)
@@ -437,6 +445,8 @@ def calculate_inflation_projection(
         baseline_total_avg=round(baseline_total_avg, 2),
         baseline_cost_used=round(baseline_cost_used, 2),
         months_analyzed=target_months if target_months else ([f"Manual (R$ {request.custom_baseline})"] if mode == "custom" else []),
+        months_count=len(target_months),
+        monthly_totals={m: round(v, 2) for m, v in monthly_totals.items()} if monthly_totals else {},
         projected_months=projected_months,
         categories_projections=category_projections,
         total_extra_cost_period=round(total_extra_cost, 2)
