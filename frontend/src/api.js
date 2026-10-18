@@ -75,6 +75,12 @@ export const api = {
     });
   },
 
+  clearAllTransactions: () => {
+    return request('/transactions/clear/all', {
+      method: 'DELETE',
+    });
+  },
+
   // Categories
   getCategories: (type) => {
     const query = type ? `?type=${encodeURIComponent(type)}` : '';
@@ -115,4 +121,61 @@ export const api = {
       }),
     });
   },
+
+  getEmergencyFundOverview: ({ lookbackMonths = 3, annualRate = 4.5, customLiquidAssets = null }) => {
+    const params = new URLSearchParams();
+    if (lookbackMonths) params.append('lookback_months', lookbackMonths);
+    if (annualRate !== undefined && annualRate !== null) params.append('annual_rate', annualRate);
+    if (customLiquidAssets !== null && customLiquidAssets !== undefined && customLiquidAssets !== '') {
+      params.append('custom_liquid_assets', customLiquidAssets);
+    }
+    const qs = params.toString();
+    return request(`/projections/emergency-fund${qs ? '?' + qs : ''}`);
+  },
+
+  // Bank Statement Import (OFX & CSV)
+  parseStatement: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const url = `${API_BASE_URL}/import/parse`;
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ detail: 'Erro ao processar extrato' }));
+      throw new Error(errorData.detail || `Erro ${response.status}`);
+    }
+    return await response.json();
+  },
+
+  confirmImport: (transactions) => {
+    return request('/import/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ transactions }),
+    });
+  },
+
+  // Category Budgets
+  getBudgetsSummary: (month) => {
+    const query = month ? `?month=${encodeURIComponent(month)}` : '';
+    return request(`/budgets/summary${query}`);
+  },
+
+  setCategoryBudget: (categoryId, monthlyLimit) => {
+    return request('/budgets/', {
+      method: 'POST',
+      body: JSON.stringify({
+        category_id: categoryId,
+        monthly_limit: Number(monthlyLimit),
+      }),
+    });
+  },
+
+  deleteCategoryBudget: (categoryId) => {
+    return request(`/budgets/${categoryId}`, {
+      method: 'DELETE',
+    });
+  },
 };
+

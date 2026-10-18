@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   LayoutDashboard, 
   ReceiptText, 
@@ -9,7 +8,10 @@ import {
   Plus, 
   ChevronLeft, 
   ChevronRight,
-  Wallet
+  Wallet,
+  Target,
+  ShieldCheck,
+  UploadCloud
 } from 'lucide-react';
 
 export default function Navbar({ 
@@ -19,13 +21,16 @@ export default function Navbar({
   setDarkMode, 
   selectedMonth, 
   setSelectedMonth,
-  onOpenNewTransaction 
+  onOpenNewTransaction,
+  onOpenImport
 }) {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'transactions', label: 'Transações', icon: ReceiptText },
+    { id: 'budgets', label: 'Metas & Teto', icon: Target },
     { id: 'categories', label: 'Categorias', icon: Tags },
     { id: 'projections', label: 'Estimativa Inflação', icon: TrendingUp },
+    { id: 'emergency_fund', label: 'Reserva de Emergência', icon: ShieldCheck },
   ];
 
   const handlePrevMonth = () => {
@@ -121,6 +126,16 @@ export default function Navbar({
               className="p-2 rounded-lg text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white bg-slate-100 dark:bg-slate-800/80 transition-colors"
             >
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+
+            {/* Importar Extrato Bancário */}
+            <button
+              onClick={onOpenImport}
+              title="Importar extrato bancário .OFX ou .CSV"
+              className="flex items-center space-x-1.5 px-3 py-1.5 sm:px-3 sm:py-2 rounded-xl text-sm font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all active:scale-[0.98]"
+            >
+              <UploadCloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="hidden md:inline">Importar</span>
             </button>
 
             {/* Nova Transação */}

@@ -32,6 +32,12 @@ def list_transactions(
         offset=offset
     )
 
+@router.delete("/clear/all", status_code=status.HTTP_200_OK)
+def clear_all_transactions(db: Session = Depends(get_db)):
+    """Deletes all transactions to allow starting with a clean/empty database."""
+    count = crud.clear_all_transactions(db)
+    return {"message": f"{count} transações removidas com sucesso", "count": count}
+
 @router.get("/{tx_id}", response_model=schemas.TransactionOut)
 def read_transaction(tx_id: int, db: Session = Depends(get_db)):
     tx = crud.get_transaction(db, tx_id)

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .database import engine, Base
-from .routers import categories, transactions, dashboard, projections
+from .routers import categories, transactions, dashboard, projections, import_statements, budgets
 from .seed import seed_database
 
 @asynccontextmanager
@@ -43,6 +43,8 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(transactions.router, prefix="/api")
 app.include_router(categories.router, prefix="/api")
 app.include_router(projections.router, prefix="/api")
+app.include_router(import_statements.router, prefix="/api")
+app.include_router(budgets.router, prefix="/api")
 
 @app.get("/api/health")
 def health_check():

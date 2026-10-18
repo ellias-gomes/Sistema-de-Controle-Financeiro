@@ -6,6 +6,9 @@ import TransactionsView from './components/TransactionsView';
 import TransactionModal from './components/TransactionModal';
 import CategoriesView from './components/CategoriesView';
 import InflationModule from './components/InflationModule';
+import BudgetingView from './components/BudgetingView';
+import EmergencyFundCalculator from './components/EmergencyFundCalculator';
+import ImportStatementModal from './components/ImportStatementModal';
 import { api } from './api';
 
 export default function App() {
@@ -35,6 +38,7 @@ export default function App() {
 
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState(null);
 
   // Apply dark mode class to <html>
@@ -136,6 +140,22 @@ export default function App() {
     }
   };
 
+  const handleClearAllTransactions = async () => {
+    const confirmed = window.confirm(
+      'Tem certeza de que deseja apagar todas as transações do banco de dados?\n\nO banco ficará completamente vazio para você importar seu extrato bancário.'
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await api.clearAllTransactions();
+      await Promise.all([loadDashboardData(), loadTransactions()]);
+      alert(res?.message || 'Banco de dados esvaziado com sucesso! Agora você pode importar seu extrato.');
+    } catch (err) {
+      console.error('Erro ao limpar banco de dados:', err);
+      alert('Erro ao esvaziar banco de dados: ' + (err.message || 'Verifique o servidor'));
+    }
+  };
+
   const handleOpenEdit = (tx) => {
     setEditingTransaction(tx);
     setIsModalOpen(true);
@@ -161,6 +181,11 @@ export default function App() {
     await Promise.all([loadCategories(), loadDashboardData(), loadTransactions()]);
   };
 
+  const handleImportSuccess = async (result) => {
+    await Promise.all([loadDashboardData(), loadTransactions()]);
+    alert(result?.message || 'Extrato bancário importado com sucesso!');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-200">
       {/* Sticky Slim Navbar */}
@@ -172,6 +197,7 @@ export default function App() {
         selectedMonth={selectedMonth}
         setSelectedMonth={setSelectedMonth}
         onOpenNewTransaction={handleOpenNew}
+        onOpenImport={() => setIsImportModalOpen(true)}
       />
 
       {/* Main Container */}
@@ -202,7 +228,17 @@ export default function App() {
                 setFilters={setTxFilters}
                 onEditTransaction={handleOpenEdit}
                 onDeleteTransaction={handleDeleteTransaction}
+                onClearAllTransactions={handleClearAllTransactions}
                 onOpenNewTransaction={handleOpenNew}
+                onOpenImport={() => setIsImportModalOpen(true)}
+              />
+            )}
+
+            {currentTab === 'budgets' && (
+              <BudgetingView 
+                selectedMonth={selectedMonth}
+                categories={categories}
+                onRefreshNeeded={() => Promise.all([loadDashboardData(), loadTransactions()])}
               />
             )}
 
@@ -217,6 +253,10 @@ export default function App() {
             {currentTab === 'projections' && (
               <InflationModule />
             )}
+
+            {currentTab === 'emergency_fund' && (
+              <EmergencyFundCalculator />
+            )}
           </>
         )}
       </main>
@@ -229,6 +269,14 @@ export default function App() {
         onDelete={handleDeleteTransaction}
         categories={categories}
         editingTx={editingTransaction}
+      />
+
+      {/* Modal for Importing Bank Statements (OFX / CSV) */}
+      <ImportStatementModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        categories={categories}
+        onSuccess={handleImportSuccess}
       />
 
       {/* Footer */}

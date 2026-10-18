@@ -144,3 +144,67 @@ class InflationProjectionResponse(BaseModel):
     projected_months: List[ProjectionMonth]
     categories_projections: List[CategoryProjection]
     total_extra_cost_period: float
+
+
+# --- Budgeting Schemas ---
+class CategoryBudgetBase(BaseModel):
+    category_id: int
+    monthly_limit: float = Field(..., gt=0, description="Monthly spending limit in BRL")
+
+class CategoryBudgetCreate(CategoryBudgetBase):
+    pass
+
+class CategoryBudgetOut(CategoryBudgetBase):
+    id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class BudgetCategoryProgress(BaseModel):
+    category_id: int
+    category_name: str
+    category_type: str
+    color: str
+    icon: str
+    is_essential: bool
+    monthly_limit: float
+    current_spent: float
+    remaining_amount: float
+    percentage_used: float
+    status: str  # 'ok' (< 80%), 'warning' (80-99.9%), 'exceeded' (>= 100%)
+    is_budget_set: bool
+
+class BudgetOverview(BaseModel):
+    month: str
+    total_budgeted: float
+    total_spent_budgeted: float
+    total_remaining_budgeted: float
+    overall_percentage: float
+    categories_with_budget: int
+    categories_exceeded: int
+    categories_warning: int
+    items: List[BudgetCategoryProgress]
+
+
+# --- Emergency Fund Schemas ---
+class EmergencyFundTarget(BaseModel):
+    months: int
+    profile_label: str
+    target_amount: float
+    coverage_gap: float
+    is_reached: bool
+    projected_12m: float
+    projected_24m: float
+
+class EmergencyFundOverview(BaseModel):
+    lookback_months: int
+    monthly_essential_avg: float
+    monthly_total_avg: float
+    current_liquid_assets: float
+    months_covered_essential: float
+    months_covered_total: float
+    annual_inflation_rate: float
+    targets: List[EmergencyFundTarget]
+

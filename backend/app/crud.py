@@ -146,6 +146,12 @@ def delete_transaction(db: Session, tx_id: int):
     db.commit()
     return True
 
+def clear_all_transactions(db: Session) -> int:
+    deleted_count = db.query(models.Transaction).delete()
+    db.commit()
+    return deleted_count
+
+
 
 # ==========================================
 # DASHBOARD CALCULATIONS
@@ -451,3 +457,103 @@ def calculate_inflation_projection(
         categories_projections=category_projections,
         total_extra_cost_period=round(total_extra_cost, 2)
     )
+
+
+# ==========================================
+# EMERGENCY FUND CALCULATOR
+# ==========================================
+
+def calculate_emergency_fund(
+    db: Session,
+    lookback_months: int = 3,
+    annual_inflation_rate: float = 4.5,
+    custom_liquid_assets: Optional[float] = None
+) -> schemas.EmergencyFundOverview:
+    # 1. Calculate current liquid balance (or use custom)
+    if custom_liquid_assets is not None and custom_liquid_assets >= 0:
+        liquid_assets = float(custom_liquid_assets)
+    else:
+        all_income = db.query(func.coalesce(func.sum(models.Transaction.amount), 0.0))\
+            .filter(models.Transaction.type == "INCOME").scalar()
+        all_expense = db.query(func.coalesce(func.sum(models.Transaction.amount), 0.0))\
+            .filter(models.Transaction.type == "EXPENSE").scalar()
+        liquid_assets = max(0.0, float(all_income) - float(all_expense))
+
+    # 2. Get past months for baseline
+    distinct_months = [
+        row[0] for row in db.query(func.distinct(func.substr(models.Transaction.date, 1, 7)))
+        .filter(models.Transaction.type == "EXPENSE")
+        .order_by(desc(func.substr(models.Transaction.date, 1, 7)))
+        .all()
+    ]
+
+    target_months = distinct_months[:lookback_months] if lookback_months > 0 else distinct_months
+    num_months = max(1, len(target_months))
+
+    monthly_essential_avg = 0.0
+    monthly_total_avg = 0.0
+
+    if target_months:
+        txs = db.query(models.Transaction)\
+            .outerjoin(models.Category, models.Transaction.category_id == models.Category.id)\
+            .filter(
+                models.Transaction.type == "EXPENSE",
+                or_(*[models.Transaction.date.startswith(m) for m in target_months])
+            ).all()
+
+        total_spent = sum(t.amount for t in txs)
+        essential_spent = sum(t.amount for t in txs if t.category and t.category.is_essential)
+
+        monthly_total_avg = total_spent / num_months
+        monthly_essential_avg = essential_spent / num_months
+
+    # If no essential categories were marked or data is sparse, fallback to 70% of total
+    if monthly_essential_avg == 0.0 and monthly_total_avg > 0:
+        monthly_essential_avg = monthly_total_avg * 0.70
+
+    # Ensure baseline is non-zero for safe division
+    safe_essential = monthly_essential_avg if monthly_essential_avg > 0 else 1.0
+    safe_total = monthly_total_avg if monthly_total_avg > 0 else 1.0
+
+    months_covered_essential = round(liquid_assets / safe_essential, 1) if monthly_essential_avg > 0 else 0.0
+    months_covered_total = round(liquid_assets / safe_total, 1) if monthly_total_avg > 0 else 0.0
+
+    # Profiles: 3, 6, 12 months
+    profiles = [
+        (3, "3 Meses • Estabilidade (Servidor Público / CLT Estável)"),
+        (6, "6 Meses • Padrão Ouro (Recomendado para CLT / Família)"),
+        (12, "12 Meses • Alta Segurança (Autônomo / PJ / Empreendedor)")
+    ]
+
+    targets = []
+    inf_factor_1y = 1.0 + (annual_inflation_rate / 100.0)
+    inf_factor_2y = (1.0 + (annual_inflation_rate / 100.0)) ** 2
+
+    for months_count, label in profiles:
+        target_val = round(monthly_essential_avg * months_count, 2)
+        gap = max(0.0, round(target_val - liquid_assets, 2))
+        is_reached = liquid_assets >= target_val
+        proj_12m = round(target_val * inf_factor_1y, 2)
+        proj_24m = round(target_val * inf_factor_2y, 2)
+
+        targets.append(schemas.EmergencyFundTarget(
+            months=months_count,
+            profile_label=label,
+            target_amount=target_val,
+            coverage_gap=gap,
+            is_reached=is_reached,
+            projected_12m=proj_12m,
+            projected_24m=proj_24m
+        ))
+
+    return schemas.EmergencyFundOverview(
+        lookback_months=num_months,
+        monthly_essential_avg=round(monthly_essential_avg, 2),
+        monthly_total_avg=round(monthly_total_avg, 2),
+        current_liquid_assets=round(liquid_assets, 2),
+        months_covered_essential=months_covered_essential,
+        months_covered_total=months_covered_total,
+        annual_inflation_rate=annual_inflation_rate,
+        targets=targets
+    )
+

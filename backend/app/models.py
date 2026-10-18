@@ -15,6 +15,19 @@ class Category(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     transactions = relationship("Transaction", back_populates="category", cascade="all, delete-orphan")
+    budget = relationship("CategoryBudget", back_populates="category", uselist=False, cascade="all, delete-orphan")
+
+
+class CategoryBudget(Base):
+    __tablename__ = "category_budgets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    monthly_limit = Column(Float, nullable=False, default=0.0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    category = relationship("Category", back_populates="budget")
 
 
 class Transaction(Base):

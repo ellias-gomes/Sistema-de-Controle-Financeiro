@@ -35,3 +35,22 @@ def project_inflation_get(
         exclude_current_month=exclude_current_month
     )
     return crud.calculate_inflation_projection(db, request)
+
+@router.get("/emergency-fund", response_model=schemas.EmergencyFundOverview)
+def get_emergency_fund_overview(
+    lookback_months: int = Query(3, ge=1, le=60, description="Months of history to calculate essential cost average"),
+    annual_rate: float = Query(4.5, ge=0, le=100, description="Expected annual inflation rate"),
+    custom_liquid_assets: float = Query(None, description="Custom current savings/liquid assets if overriding current balance"),
+    db: Session = Depends(get_db)
+):
+    """
+    Dimensions dynamic emergency fund based on historical essential living costs,
+    current accumulated liquid assets, and future inflation impact.
+    """
+    return crud.calculate_emergency_fund(
+        db=db,
+        lookback_months=lookback_months,
+        annual_inflation_rate=annual_rate,
+        custom_liquid_assets=custom_liquid_assets
+    )
+

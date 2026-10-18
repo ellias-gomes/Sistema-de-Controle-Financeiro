@@ -22,7 +22,7 @@ DEFAULT_CATEGORIES = [
     {"name": "Rendimentos & Investimentos", "type": "INCOME", "color": "#84CC16", "icon": "TrendingUp", "is_essential": False},
 ]
 
-def seed_database():
+def seed_database(populate_demo: bool = False):
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -42,11 +42,12 @@ def seed_database():
             for cat in db.query(models.Category).all():
                 cat_map[cat.name] = cat.id
 
-        # Check if transactions exist
-        existing_txs = db.query(models.Transaction).count()
-        if existing_txs == 0:
-            print("Populando dados de demonstração dos últimos 3 meses...")
-            today = date.today()
+        # Only insert demonstration transactions if explicitly requested
+        if populate_demo:
+            existing_txs = db.query(models.Transaction).count()
+            if existing_txs == 0:
+                print("Populando dados de demonstração dos últimos 3 meses...")
+                today = date.today()
 
             for i in range(2, -1, -1):
                 month_date = today.replace(day=1) - relativedelta(months=i)
@@ -147,4 +148,6 @@ def seed_database():
         db.close()
 
 if __name__ == "__main__":
-    seed_database()
+    import sys
+    with_demo = "--demo" in sys.argv
+    seed_database(populate_demo=with_demo)

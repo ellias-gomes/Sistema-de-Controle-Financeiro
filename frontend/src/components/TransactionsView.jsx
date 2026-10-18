@@ -9,7 +9,8 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Calendar,
-  X
+  X,
+  UploadCloud
 } from 'lucide-react';
 import { formatCurrency, formatDateBR } from '../utils/formatters';
 
@@ -20,7 +21,9 @@ export default function TransactionsView({
   setFilters, 
   onEditTransaction, 
   onDeleteTransaction, 
-  onOpenNewTransaction 
+  onClearAllTransactions,
+  onOpenNewTransaction,
+  onOpenImport
 }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
@@ -51,13 +54,34 @@ export default function TransactionsView({
               Controle detalhado de entradas, despesas e adiantamentos
             </p>
           </div>
-          <button
-            onClick={onOpenNewTransaction}
-            className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/30 transition-all active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Nova Transação</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            {onClearAllTransactions && transactions.length > 0 && (
+              <button
+                onClick={onClearAllTransactions}
+                title="Esvaziar todas as transações para deixar o banco limpo"
+                className="inline-flex items-center space-x-1.5 px-3 py-2 rounded-xl text-sm font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 border border-rose-200/50 dark:border-rose-900/40 transition-all active:scale-[0.98]"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Esvaziar Banco</span>
+              </button>
+            )}
+            {onOpenImport && (
+              <button
+                onClick={onOpenImport}
+                className="inline-flex items-center space-x-2 px-3.5 py-2 rounded-xl text-sm font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-all active:scale-[0.98]"
+              >
+                <UploadCloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Importar Extrato</span>
+              </button>
+            )}
+            <button
+              onClick={onOpenNewTransaction}
+              className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/30 transition-all active:scale-[0.98]"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Nova Transação</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Controls */}
@@ -265,8 +289,29 @@ export default function TransactionsView({
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400 text-sm">
-                    Nenhuma transação encontrada com os filtros selecionados.
+                  <td colSpan={7} className="py-12 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <UploadCloud className="w-6 h-6" />
+                      </div>
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        {hasActiveFilters ? 'Nenhuma transação encontrada' : 'Banco de dados vazio e limpo!'}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
+                        {hasActiveFilters 
+                          ? 'Ajuste os filtros de busca para visualizar os lançamentos.'
+                          : 'Nenhuma transação cadastrada. Você pode importar seu extrato bancário (.OFX ou .CSV) ou adicionar lançamentos manualmente.'}
+                      </p>
+                      {!hasActiveFilters && onOpenImport && (
+                        <button
+                          onClick={onOpenImport}
+                          className="mt-2 inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/30 transition-all active:scale-[0.98]"
+                        >
+                          <UploadCloud className="w-3.5 h-3.5" />
+                          <span>Importar Extrato Agora</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               )}
